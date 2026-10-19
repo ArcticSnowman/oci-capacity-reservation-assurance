@@ -1,0 +1,3 @@
+capacity reservation OCID,date,hour,shape,ocpus,memory_gbs,count
+ocid1.capacityreservation.oc1.us-ashburn-1.example,2026-12-25,,VM.Standard.E6.Flex,3,12,0
+ocid1.capacityreservation.oc1.us-ashburn-1.example,2026-12-25,12,VM.Standard.E6.Flex,3,12,8

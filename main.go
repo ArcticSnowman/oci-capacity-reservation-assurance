@@ -53,6 +53,16 @@ type availabilityDomainPlan struct {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "schedule" {
+		if err := scheduleMain(context.Background(), os.Args[2:], os.Stdout); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return
+			}
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	opts, err := parseFlags(os.Args[1:])
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {

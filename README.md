@@ -1,6 +1,13 @@
 # oci-capacity-reservation-assurance
 Runs a script locally to ensure that a capacity reservation exists in the specified compartment for the requested shape and quantity. This script will incur changes on OCI. Run Responsibly.
 
+## Scheduled updates
+
+Use `go run . schedule validate|preview|apply` to manage existing reservations
+from per-shape `weekly-*.csv` and `override-*.csv` files. See
+[SCHEDULER.md](SCHEDULER.md) for CSV templates, testing, shape selection, and deployment.
+The commands below retain the original creation behavior.
+
 ## What it does
 
 This Go script:
