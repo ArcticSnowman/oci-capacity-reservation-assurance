@@ -39,6 +39,9 @@ type options struct {
 	ResourceManagement string
 	Configs            []core.InstanceReservationConfigDetails
 	ConfigADs          []string
+	Profile            string
+	Update             bool
+	ReservationID      string
 }
 
 type configComparison struct {
@@ -103,6 +106,9 @@ func parseFlags(args []string) (options, error) {
 	fs.BoolVar(&opts.PreflightOnly, "preflight-only", false, "check requested shapes against OCI and print the create request body without creating a reservation")
 	fs.BoolVar(&opts.SkipPreflight, "skip-preflight", false, "skip the OCI shape availability preflight before creating the reservation")
 	fs.StringVar(&opts.ResourceManagement, "resource-management", "", "optional internal shape resource management value: STATIC or DYNAMIC")
+	fs.StringVar(&opts.Profile, "profile", "DEFAULT", "OCI config profile to use, defaults to DEFAULT")
+	fs.BoolVar(&opts.Update, "update", false, "update an existing capacity reservation")
+	fs.StringVar(&opts.ReservationID, "reservation-id", "", "optional OCID of the capacity reservation to manage")
 
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "Usage: %s [flags]\n\n", os.Args[0])
@@ -110,7 +116,7 @@ func parseFlags(args []string) (options, error) {
 		fmt.Fprintln(fs.Output(), "\nRequired flags:")
 		fmt.Fprintln(fs.Output(), "  --compartment-id plus either --config-file or all of --instance-type, --ocpus, --memory-gbs, --quantity")
 		fmt.Fprintln(fs.Output(), "\nExample:")
-		fmt.Fprintf(fs.Output(), "  %s --instance-type VM.Standard.E4.Flex --ocpus 4 --memory-gbs 64 --compartment-id ocid1.compartment.oc1..example --quantity 3 --availability-domain Uocm:US-ASHBURN-AD-1\n\n", os.Args[0])
+		fmt.Fprintf(fs.Output(), "  %s --instance-type VM.Standard.E4.Flex --ocpus 4 --memory-gbs 64 --compartment-id ocid1.compartment.oc1..example --quantity 3 --availability-domain Uocm:US-ASHBURN-AD-1 --profile DEFAULT\n\n", os.Args[0])
 		fs.PrintDefaults()
 	}
 
@@ -183,11 +189,11 @@ func run(parent context.Context, opts options) error {
 	ctx, cancel := context.WithTimeout(parent, opts.Timeout)
 	defer cancel()
 
-	provider := common.DefaultConfigProvider()
+	provider := common.CustomProfileConfigProvider("", opts.Profile)
 
 	region, err := provider.Region()
 	if err != nil {
-		return fmt.Errorf("read region from DEFAULT OCI profile: %w", err)
+		return fmt.Errorf("read region from %s OCI profile: %w", opts.Profile, err)
 	}
 
 	var availabilityDomains []string
@@ -212,6 +218,16 @@ func run(parent context.Context, opts options) error {
 	plans, err := buildAvailabilityDomainPlans(opts, availabilityDomains)
 	if err != nil {
 		return err
+	}
+
+	if opts.Update && opts.ReservationID == "" {
+		return errors.New("--update requires --reservation-id to be specified")
+	}
+	if !opts.Update && opts.ReservationID != "" {
+		return errors.New("--reservation-id can only be used with --update")
+	}
+	if opts.Update && len(plans) != 1 {
+		return errors.New("--update requires exactly one plan to be specified")
 	}
 
 	if opts.DryRun {
@@ -251,39 +267,57 @@ func run(parent context.Context, opts options) error {
 		return fmt.Errorf("create work request client: %w", err)
 	}
 
+	var verb string
+	if opts.Update {
+		verb = "Updating"
+	} else {
+		verb = "Creating"
+	}
+
 	for _, plan := range plans {
 		availabilityDomain := plan.AvailabilityDomain
 		planOpts := plan.Options
 
-		fmt.Printf("Creating capacity reservation %q in region %s, availability domain %s\n", planOpts.DisplayName, region, availabilityDomain)
-		createResp, err := createCapacityReservation(ctx, computeClient, planOpts, availabilityDomain)
-		if err != nil {
-			return createCapacityReservationError(err, planOpts, availabilityDomain)
+		fmt.Printf("%s capacity reservation %q in region %s, availability domain %s\n", verb, planOpts.DisplayName, region, availabilityDomain)
+		var reservationID string
+
+		if !opts.Update {
+			createResp, err := createCapacityReservation(ctx, computeClient, planOpts, availabilityDomain)
+			if err != nil {
+				return createCapacityReservationError(err, planOpts, availabilityDomain)
+			}
+
+			reservationID = value(createResp.ComputeCapacityReservation.Id)
+			workRequestID := value(createResp.OpcWorkRequestId)
+			fmt.Printf("Create request accepted\n")
+			if reservationID != "" {
+				fmt.Printf("Reservation ID: %s\n", reservationID)
+			}
+			if workRequestID == "" {
+				return errors.New("create response did not include an opc-work-request-id")
+			}
+			fmt.Printf("Work request ID: %s\n", workRequestID)
+
+			workRequest, err := waitForWorkRequest(ctx, workRequestClient, workRequestID, planOpts.PollInterval)
+			if err != nil {
+				return err
+			}
+
+			if workRequest.Status != workrequests.WorkRequestStatusSucceeded {
+				return workRequestFailure(ctx, workRequestClient, workRequestID, workRequest.Status)
+			}
+
+			if reservationID == "" {
+				reservationID = reservationIDFromWorkRequest(workRequest)
+			}
+		} else {
+			reservationID = opts.ReservationID
+			if reservationID != "" {
+				fmt.Printf("Reservation ID: %s\n", reservationID)
+			}
+
 		}
 
-		reservationID := value(createResp.ComputeCapacityReservation.Id)
-		workRequestID := value(createResp.OpcWorkRequestId)
-		fmt.Printf("Create request accepted\n")
-		if reservationID != "" {
-			fmt.Printf("Reservation ID: %s\n", reservationID)
-		}
-		if workRequestID == "" {
-			return errors.New("create response did not include an opc-work-request-id")
-		}
-		fmt.Printf("Work request ID: %s\n", workRequestID)
-
-		workRequest, err := waitForWorkRequest(ctx, workRequestClient, workRequestID, planOpts.PollInterval)
-		if err != nil {
-			return err
-		}
-
-		if workRequest.Status != workrequests.WorkRequestStatusSucceeded {
-			return workRequestFailure(ctx, workRequestClient, workRequestID, workRequest.Status)
-		}
-
-		if reservationID == "" {
-			reservationID = reservationIDFromWorkRequest(workRequest)
-		}
 		if reservationID == "" {
 			return errors.New("work request succeeded, but no compute capacity reservation OCID was found")
 		}
