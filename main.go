@@ -42,6 +42,7 @@ type options struct {
 	Profile            string
 	Update             bool
 	ReservationID      string
+	Version            bool
 }
 
 type configComparison struct {
@@ -73,6 +74,11 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(2)
+	}
+
+	if opts.Version {
+		fmt.Println(APPLICATION)
+		return
 	}
 
 	if err := run(context.Background(), opts); err != nil {
@@ -109,6 +115,7 @@ func parseFlags(args []string) (options, error) {
 	fs.StringVar(&opts.Profile, "profile", "DEFAULT", "OCI config profile to use, defaults to DEFAULT")
 	fs.BoolVar(&opts.Update, "update", false, "update an existing capacity reservation")
 	fs.StringVar(&opts.ReservationID, "reservation-id", "", "optional OCID of the capacity reservation to manage")
+	fs.BoolVar(&opts.Version, "version", false, "print the command version and exit")
 
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "Usage: %s [flags]\n\n", os.Args[0])
@@ -122,6 +129,11 @@ func parseFlags(args []string) (options, error) {
 
 	if err := fs.Parse(args); err != nil {
 		return opts, err
+	}
+
+	if opts.Version {
+		fmt.Println(APPLICATION)
+		os.Exit(0)
 	}
 
 	if strings.TrimSpace(opts.CompartmentID) == "" {

@@ -3,7 +3,7 @@ Runs a script locally to ensure that a capacity reservation exists in the specif
 
 ## Scheduled updates
 
-Use `go run . schedule validate|preview|apply` to manage existing reservations
+Use `bin/oci-capacity-reservation-assurance schedule validate|preview|apply` to manage existing reservations
 from per-shape `weekly-*.csv` and `override-*.csv` files. See
 [SCHEDULER.md](SCHEDULER.md) for CSV templates, testing, shape selection, and deployment.
 The commands below retain the original creation behavior.
@@ -12,7 +12,7 @@ The commands below retain the original creation behavior.
 
 This Go script:
 
-1. Uses the `DEFAULT` profile in `~/.oci/config`.
+1. Uses the `DEFAULT` profile in `~/.oci/config`. (or another profile if specified with `--profile`)
 2. Uses your tenancy-specific availability domain name, such as `Dfpy:US-PHOENIX-AD-2`, or `ALL` to spread the request across every AD in the current region.
 3. Creates an OCI compute capacity reservation for either one CLI-specified config or many configs from a JSON file. With `--availability-domain ALL`, it creates one reservation per AD that receives non-zero capacity. If the JSON configs include `availabilityDomain`, the script uses that custom distribution instead.
 4. Waits for the returned work request to reach a terminal state.
@@ -24,12 +24,20 @@ If OCI cannot reach the requested quantity before `--timeout`, the script exits 
 Use `oci iam availability-domain list` to get your tenancy-specific availability domain names.
 The `region` in your `DEFAULT` profile must match the availability domain region, for example `us-ashburn-1` with `...:US-ASHBURN-AD-1`.
 
+## Installation
+
+To install the tool, ensure you have Go installed and run:
+
+```bash
+make compile
+```
+
 ## Usage
 
 Single config:
 
 ```bash
-go run . \
+bin/oci-capacity-reservation-assurance \
   --instance-type VM.Standard.E4.Flex \
   --ocpus 4 \
   --memory-gbs 64 \
@@ -41,7 +49,7 @@ go run . \
 Multiple configs from a file:
 
 ```bash
-go run . \
+bin/oci-capacity-reservation-assurance \
   --config-file example.json \
   --compartment-id ocid1.compartment.oc1..example \
   --availability-domain Uocm:US-ASHBURN-AD-1
@@ -50,7 +58,7 @@ go run . \
 Spread across all availability domains in the `DEFAULT` profile region:
 
 ```bash
-go run . \
+bin/oci-capacity-reservation-assurance \
   --config-file example.json \
   --compartment-id ocid1.compartment.oc1..example \
   --availability-domain ALL

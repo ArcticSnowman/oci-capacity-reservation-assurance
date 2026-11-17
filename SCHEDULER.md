@@ -62,9 +62,9 @@ ocid1.capacityreservation.oc1.us-ashburn-1.example,2026-12-25,12,VM.Standard.E5.
 Run commands from the repository directory with Go 1.24 or later:
 
 ```bash
-go run . schedule validate --schedule-dir schedules --timezone America/Detroit
+bin/oci-capacity-reservation-assurance schedule validate --schedule-dir schedules --timezone America/Detroit
 
-go run . schedule preview --schedule-dir schedules --timezone America/Detroit \
+bin/oci-capacity-reservation-assurance schedule preview --schedule-dir schedules --timezone America/Detroit \
   --from 2026-12-25 --hours 24
 ```
 
@@ -76,7 +76,7 @@ also shows inactive managed sizes with count zero.
 Select shapes granularly:
 
 ```bash
-go run . schedule preview --schedule-dir schedules --timezone America/Detroit \
+bin/oci-capacity-reservation-assurance schedule preview --schedule-dir schedules --timezone America/Detroit \
   --shape VM.Standard.E5.Flex --from 2026-12-25 --hours 24
 ```
 
@@ -85,7 +85,7 @@ identify and validate their shape, then selected shapes are combined. Use explic
 files to exclude all other files from parsing:
 
 ```bash
-go run . schedule validate --timezone America/Detroit \
+bin/oci-capacity-reservation-assurance schedule validate --timezone America/Detroit \
   --file schedules/weekly-e5.csv --file schedules/override-e5.csv
 ```
 
@@ -105,7 +105,7 @@ combined with `--hours 1`.
 With real reservation OCIDs and working OCI credentials:
 
 ```bash
-go run . schedule apply --schedule-dir schedules --timezone America/Detroit \
+bin/oci-capacity-reservation-assurance schedule apply --schedule-dir schedules --timezone America/Detroit \
   --region us-ashburn-1 --dry-run
 ```
 
@@ -138,7 +138,7 @@ configurations are rejected locally.
 After reviewing your preview and dry-run:
 
 ```bash
-go run . schedule apply --schedule-dir schedules --timezone America/Detroit \
+bin/oci-capacity-reservation-assurance schedule apply --schedule-dir schedules --timezone America/Detroit \
   --region us-ashburn-1
 ```
 
